@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Flashcards — исправлено</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
+
+<style>
+  :root{
+    --bg: #fbfbfc;
+    --card-bg: #ffffff;
+    --accent: #0ea5a4;
+    --muted: #6b7280;
+    --text: #0f1724;
+    --radius: 14px;
+    --card-height: 420px;
+    --panel-width: 360px;
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    min-height:100vh;
+    background:linear-gradient(180deg,#fbfbfc,#f7f8fa);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:28px;
+    color:var(--text);
+  }
+
+  .container{
+    width:100%;
+    max-width:1100px;
+    display:grid;
+    grid-template-columns: var(--panel-width) 1fr;
+    gap:28px;
+    align-items:start;
+  }
+
+  /* Left panel */
+  .panel{
+    background:var(--card-bg);
+    border-radius:12px;
+    padding:18px;
+    border:1px solid #eef0f2;
+    box-shadow: 0 8px 20px rgba(2,6,23,0.06);
+    height:var(--card-height);
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    overflow:auto;
+  }
+
+  .meta { font-size:13px; color:var(--muted); }
+
+  .drop {
+    padding:14px;
+    border-radius:10px;
+    border:1px dashed #e6e7ea;
+    background:#fff;
+    text-align:center;
+    color:var(--muted);
+    cursor:pointer;
+    min-height:56px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+  }
+  .drop:hover { transform:translateY(-2px); transition:.12s; }
+
+  input[type="file"]{ display:none; }
+
+  .row { display:flex; gap:10px; align-items:center; width:100%; }
+  .col { display:flex; flex-direction:column; gap:6px; width:100%; }
+
+  input[type="number"], select {
+    padding:9px 12px;
+    border-radius:10px;
+    border:1px solid #e6e7ea;
+    background:transparent;
+    font-size:14px;
+    outline:none;
+    width:100%;
+  }
+
+  .btn {
+    padding:10px 14px;
+    border-radius:10px;
+    border:none;
+    cursor:pointer;
+    font-weight:600;
+    background:var(--accent);
+    color:#fff;
+  }
+  .btn.ghost { background:transparent; border:1px solid #e6e7ea; color:var(--text); font-weight:600; }
+
+  pre.format{
+    background:#fafafa;
+    padding:10px;
+    border-radius:8px;
+    border:1px solid #f0f0f0;
+    font-size:13px;
+    color:#333;
+  }
+
+  /* Right: stage & card - УПРОЩЕННАЯ СТРУКТУРА КАРТОЧКИ */
+  .stage { display:flex; flex-direction:column; gap:14px; align-items:center; }
+
+  .card-wrap { 
+    width:100%; 
+    max-width:760px; 
+    perspective:1200px; 
+  }
+  
+  .card {
+    width:100%;
+    height:var(--card-height);
+    background:var(--card-bg);
+    border-radius:16px;
+    box-shadow:0 20px 50px rgba(2,6,23,0.08);
+    position:relative;
+    transform-style:preserve-3d;
+    transition: transform 560ms cubic-bezier(.2,.9,.3,1);
+    cursor:pointer;
+    border:1px solid #eef0f2;
+  }
+  
+  .card.flipped { 
+    transform: rotateY(180deg); 
+  }
+
+  .face {
+    position:absolute;
+    width:100%;
+    height:100%;
+    padding:30px;
+    backface-visibility:hidden;
+    -webkit-backface-visibility:hidden;
+    border-radius:16px;
+    display:flex;
+    flex-direction:column;
+  }
+
+  .front { 
+    background: linear-gradient(180deg,#fff,#fbfbfc);
+  }
+  
+  .back { 
+    background: linear-gradient(180deg,#fff,#fbfbfc);
+    transform: rotateY(180deg);
+  }
+
+  .card-content {
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+  }
+
+  .qtext, .atext {
+    font-size:26px;
+    font-weight:600;
+    line-height:1.3;
+    color:var(--text);
+    max-height:65%;
+    overflow:auto;
+    word-wrap:break-word;
+  }
+
+  .card-footer {
+    margin-top:auto;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+
+  .pill { 
+    padding:8px 12px; 
+    border-radius:999px; 
+    background:#f5f7f8; 
+    border:1px solid #eef0f2; 
+    color:var(--muted); 
+    font-size:13px; 
+  }
+
+  .small-muted { 
+    color:var(--muted); 
+    font-size:13px; 
+  }
+
+  .controls { 
+    display:flex; 
+    align-items:center; 
+    justify-content:space-between; 
+    width:100%; 
+    max-width:760px; 
+    gap:12px; 
+  }
+  
+  .nav { 
+    display:flex; 
+    gap:10px; 
+    align-items:center; 
+  }
+  
+  .icon-btn { 
+    padding:10px 12px; 
+    border-radius:10px; 
+    border:1px solid #e6e7ea; 
+    background:transparent; 
+    cursor:pointer; 
+    font-weight:700; 
+  }
+
+  @media (max-width:900px){
+    .container { grid-template-columns: 1fr; }
+    .panel { height:auto; order:2; }
+    .card { height:340px; }
+  }
+
+  .qtext::-webkit-scrollbar, .atext::-webkit-scrollbar { width:8px; height:8px; }
+  .qtext::-webkit-scrollbar-thumb, .atext::-webkit-scrollbar-thumb { background:#e9ecef; border-radius:8px; }
+</style>
+</head>
+<body>
+  <div class="container">
+    <!-- Left -->
+    <aside class="panel" aria-label="Настройки">
+      <div class="meta">Файл с вопросами (.docx / .txt)</div>
+
+      <label class="drop" id="dropzone">Клик или перетащи файл
+        <input id="fileInput" type="file" accept=".docx,.txt" />
+      </label>
+
+      <div class="col">
+        <div class="meta small-muted">Количество карточек (пусто — все)</div>
+        <input id="limitInput" type="number" min="0" placeholder="Все" />
+      </div>
+
+      <div class="col">
+        <div class="meta small-muted">Перемешать</div>
+        <select id="shuffleSelect"><option value="1">Да</option><option value="0">Нет</option></select>
+      </div>
+
+      <div class="row">
+        <button id="loadBtn" class="btn" style="flex:1">Загрузить и начать</button>
+        <button id="exampleBtn" class="btn ghost" style="width:110px">Пример</button>
+      </div>
+
+      <div>
+        <div class="meta small-muted">Формат (каждая пара)</div>
+        <pre class="format">&lt;question&gt; Текст вопроса
+&lt;variant&gt; Текст ответа</pre>
+      </div>
+
+      <div id="error" style="color:#c53030; display:none; font-size:13px;"></div>
+    </aside>
+
+    <!-- Right -->
+    <main class="stage">
+      <div class="card-wrap">
+        <div id="card" class="card" title="Клик — показать/скрыть ответ">
+          <div class="face front">
+            <div class="card-content">
+              <div class="qtext" id="qtext">Загрузите файл, чтобы начать</div>
+            </div>
+            <div class="card-footer">
+              <div class="pill" id="progress">0 / 0</div>
+              <div class="small-muted" id="flippedCount">Перевернули: 0</div>
+            </div>
+          </div>
+
+          <div class="face back">
+            <div class="card-content">
+              <div class="atext" id="atext">Ответ</div>
+            </div>
+            <div class="card-footer">
+              <div class="pill" id="info">—</div>
+              <div class="small-muted">Нажмите пробел — скрыть</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="nav">
+          <button id="prevBtn" class="icon-btn" title="Предыдущая (←)">◀</button>
+          <button id="flipBtn" class="btn">Показать ответ</button>
+          <button id="nextBtn" class="icon-btn" title="Следующая (→)">▶</button>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:center">
+          <div class="small-muted" id="indexLabel">0 / 0</div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+<script>
+  const $ = id => document.getElementById(id);
+
+  // state
+  let cards = []; // {question, answer}
+  let idx = 0;
+  let flippedCount = 0;
+
+  // elements
+  const cardEl = $('card');
+  const qtextEl = $('qtext');
+  const atextEl = $('atext');
+  const progressEl = $('progress');
+  const indexLabel = $('indexLabel');
+  const flippedCountEl = $('flippedCount');
+  const infoEl = $('info');
+  const flipBtn = $('flipBtn');
+
+  // helpers
+  function shuffleArray(arr){
+    for (let i = arr.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  function showError(msg){
+    const el = $('error'); el.style.display = 'block'; el.textContent = msg;
+    setTimeout(()=> el.style.display = 'none', 4500);
+  }
+
+  function renderCard(){
+    if (!cards.length){
+      qtextEl.textContent = 'Загрузите файл, чтобы начать';
+      atextEl.textContent = 'Ответ';
+      progressEl.textContent = '0 / 0';
+      indexLabel.textContent = '0 / 0';
+      flippedCountEl.textContent = 'Перевернули: 0';
+      infoEl.textContent = '—';
+      cardEl.classList.remove('flipped');
+      flipBtn.textContent = 'Показать ответ';
+      return;
+    }
+
+    if (idx < 0) idx = 0;
+    if (idx >= cards.length) idx = cards.length - 1;
+
+    qtextEl.textContent = cards[idx].question;
+    atextEl.textContent = cards[idx].answer;
+    progressEl.textContent = `${idx+1} / ${cards.length}`;
+    indexLabel.textContent = `${idx+1} / ${cards.length}`;
+    flippedCountEl.textContent = `Перевернули: ${flippedCount}`;
+    infoEl.textContent = `Карточка ${idx+1}`;
+
+    // ensure front side visible on render
+    cardEl.classList.remove('flipped');
+    flipBtn.textContent = 'Показать ответ';
+  }
+
+  function toggleFlip(force){
+    if (typeof force === 'boolean'){
+      force ? cardEl.classList.add('flipped') : cardEl.classList.remove('flipped');
+    } else {
+      cardEl.classList.toggle('flipped');
+    }
+    const isFlipped = cardEl.classList.contains('flipped');
+    if (isFlipped){
+      flippedCount++;
+      flippedCountEl.textContent = `Перевернули: ${flippedCount}`;
+      flipBtn.textContent = 'Скрыть ответ';
+    } else {
+      flipBtn.textContent = 'Показать ответ';
+    }
+  }
+
+  function nextCard(){ if(!cards.length) return; idx = (idx + 1) % cards.length; renderCard(); }
+  function prevCard(){ if(!cards.length) return; idx = (idx - 1 + cards.length) % cards.length; renderCard(); }
+
+  // file handling & drag/drop
+  const fileInput = $('fileInput');
+  const dropzone = $('dropzone');
+
+  dropzone.addEventListener('click', () => fileInput.click());
+  dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.style.borderColor = '#d0d6da'; });
+  dropzone.addEventListener('dragleave', e => { dropzone.style.borderColor = ''; });
+  dropzone.addEventListener('drop', async e => {
+    e.preventDefault();
+    dropzone.style.borderColor = '';
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) await handleFile(e.dataTransfer.files[0]);
+  });
+
+  fileInput.addEventListener('change', async e => {
+    const f = e.target.files && e.target.files[0];
+    if (f) await handleFile(f);
+  });
+
+  async function handleFile(file){
+    try {
+      cards = []; idx = 0; flippedCount = 0;
+      const name = (file.name || '').toLowerCase();
+      let raw = '';
+      if (name.endsWith('.docx')){
+        const arr = await file.arrayBuffer();
+        const res = await mammoth.extractRawText({ arrayBuffer: arr });
+        raw = res.value || '';
+      } else {
+        raw = await file.text();
+      }
+
+      const parsed = parseQuestionsFromText(raw);
+      if (!parsed.length){ showError('Вопросы не найдены. Проверьте теги <question> и <variant>.'); return; }
+
+      if ($('shuffleSelect').value === '1') shuffleArray(parsed);
+
+      const limit = Math.max(0, parseInt($('limitInput').value || 0) || 0);
+      cards = (limit > 0 && limit < parsed.length) ? parsed.slice(0, limit) : parsed.slice();
+
+      renderCard();
+    } catch (err){
+      console.error(err);
+      showError('Ошибка чтения файла: ' + (err.message || err));
+    }
+  }
+
+  function parseQuestionsFromText(text){
+    const lines = text.split(/\r?\n/);
+    const res = [];
+    let cur = null;
+    for (let rawLine of lines){
+      const line = rawLine.trim();
+      if (!line) continue;
+      if (line.toLowerCase().startsWith('<question>')){
+        if (cur) res.push(cur);
+        cur = { question: line.replace(/<question>/i, '').trim(), answer: '' };
+      } else if (line.toLowerCase().startsWith('<variant>')){
+        if (!cur) cur = { question: '', answer: '' };
+        cur.answer = line.replace(/<variant>/i, '').trim();
+      } else {
+        if (cur) {
+          if (cur.answer === '') cur.question += (cur.question ? ' ' : '') + line;
+          else cur.answer += (cur.answer ? ' ' : '') + line;
+        }
+      }
+    }
+    if (cur) res.push(cur);
+    return res.filter(i => i.question && i.answer);
+  }
+
+  // UI actions
+  $('loadBtn').addEventListener('click', () => {
+    const f = fileInput.files && fileInput.files[0];
+    if (f) handleFile(f); else showError('Выберите файл или перетащите его.');
+  });
+
+  $('exampleBtn').addEventListener('click', () => {
+    const sample = [
+      { question: 'Что такое IP-адрес?', answer: 'Уникальный сетевой адрес устройства в сети.' },
+      { question: 'Что делает CPU?', answer: 'Выполняет инструкции и обработку данных.' },
+      { question: 'HTML — это?', answer: 'Язык разметки для веб-страниц.' }
+    ];
+    cards = $('shuffleSelect').value === '1' ? shuffleArray(sample) : sample.slice();
+    idx = 0; flippedCount = 0;
+    renderCard();
+  });
+
+  $('nextBtn').addEventListener('click', nextCard);
+  $('prevBtn').addEventListener('click', prevCard);
+
+  // click on card -> flip
+  cardEl.addEventListener('click', () => toggleFlip());
+
+  // flip button should not propagate (avoid double-toggling)
+  flipBtn.addEventListener('click', e => { e.stopPropagation(); toggleFlip(); });
+
+  // keyboard
+  window.addEventListener('keydown', e => {
+    if (e.code === 'ArrowRight') nextCard();
+    if (e.code === 'ArrowLeft') prevCard();
+    if (e.code === 'Space') { e.preventDefault(); toggleFlip(); }
+  });
+
+  // initial render
+  renderCard();
+</script>
+</body>
+</html>
