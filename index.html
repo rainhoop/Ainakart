@@ -29,18 +29,18 @@
     justify-content:center;
     padding:28px;
     color:var(--text);
+    position: relative;
   }
 
   .container{
     width:100%;
     max-width:1100px;
-    display:grid;
-    grid-template-columns: var(--panel-width) 1fr;
+    display:flex;
     gap:28px;
     align-items:start;
   }
 
-  /* Left panel */
+  /* Left panel - теперь скрыта */
   .panel{
     background:var(--card-bg);
     border-radius:12px;
@@ -52,6 +52,38 @@
     flex-direction:column;
     gap:12px;
     overflow:auto;
+    position: fixed;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 100;
+    width: var(--panel-width);
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    transform: translateY(-50%) translateX(-100%);
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  .panel.panel-open {
+    transform: translateY(-50%) translateX(0);
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* Кнопка открытия панели */
+  .panel-toggle {
+    position: fixed;
+    left: 20px;
+    top: 20px;
+    z-index: 101;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
   }
 
   .meta { font-size:13px; color:var(--muted); }
@@ -129,7 +161,14 @@
   }
 
   /* Right: stage & card */
-  .stage { display:flex; flex-direction:column; gap:14px; align-items:center; }
+  .stage { 
+    flex: 1;
+    display:flex; 
+    flex-direction:column; 
+    gap:14px; 
+    align-items:center; 
+    max-width: 100%;
+  }
 
   .card-wrap { 
     width:100%; 
@@ -182,7 +221,7 @@
     justify-content:center;
     align-items:center;
     text-align:center;
-    min-height: 0; /* Важно для корректной работы flex с overflow */
+    min-height: 0;
   }
 
   .qtext, .atext {
@@ -202,7 +241,7 @@
     display:flex;
     justify-content:space-between;
     align-items:center;
-    flex-shrink: 0; /* Запрещаем сжатие футера */
+    flex-shrink: 0;
   }
 
   .pill { 
@@ -243,16 +282,54 @@
     font-weight:700; 
   }
 
+  /* Оверлей для мобильных */
+  .panel-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 99;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease;
+  }
+
+  .panel-overlay.active {
+    opacity: 1;
+    visibility: visible;
+  }
+
   /* Адаптивные стили для мобильных устройств */
   @media (max-width:900px){
     .container { 
-      grid-template-columns: 1fr; 
+      flex-direction: column;
       gap: 20px;
     }
-    .panel { 
-      height:auto; 
-      order:2; 
-      max-height: 400px;
+    
+    .panel {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      transform: translateY(100%);
+      width: 100%;
+      height: auto;
+      max-height: 90vh;
+      border-radius: 20px 20px 0 0;
+      z-index: 100;
+    }
+    
+    .panel.panel-open {
+      transform: translateY(10%);
+    }
+    
+    .panel-toggle {
+      left: 50%;
+      transform: translateX(-50%);
+      top: 10px;
     }
     
     .card { 
@@ -278,6 +355,14 @@
 
   /* Для очень маленьких экранов */
   @media (max-width: 480px) {
+    .panel {
+      max-height: 85vh;
+    }
+    
+    .panel.panel-open {
+      transform: translateY(15%);
+    }
+    
     .card {
       min-height: 250px;
       max-height: 50vh;
@@ -304,9 +389,15 @@
 </style>
 </head>
 <body>
+  <!-- Кнопка открытия панели -->
+  <button id="panelToggle" class="panel-toggle">☰ Настройки</button>
+  
+  <!-- Оверлей для закрытия панели на мобильных -->
+  <div id="panelOverlay" class="panel-overlay"></div>
+
   <div class="container">
-    <!-- Left -->
-    <aside class="panel" aria-label="Настройки">
+    <!-- Left panel (теперь скрыта) -->
+    <aside class="panel" id="settingsPanel" aria-label="Настройки">
       <div class="meta">Файл с вопросами (.docx / .txt)</div>
 
       <label class="drop" id="dropzone">Клик или перетащи файл
@@ -336,7 +427,6 @@
 
       <div id="error" style="color:#c53030; display:none; font-size:13px;"></div>
 
-      <!-- Добавлена ссылка на GitHub -->
       <div class="github-link">
         <a href="https://github.com/rainhoop/Ainakart" target="_blank">
           <svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor">
@@ -506,6 +596,7 @@
       cards = (limit > 0 && limit < parsed.length) ? parsed.slice(0, limit) : parsed.slice();
 
       renderCard();
+      closePanel(); // Закрываем панель после загрузки файла
     } catch (err){
       console.error(err);
       showError('Ошибка чтения файла: ' + (err.message || err));
@@ -536,6 +627,35 @@
     return res.filter(i => i.question && i.answer);
   }
 
+  // Управление панелью настроек
+  const panel = $('settingsPanel');
+  const panelToggle = $('panelToggle');
+  const panelOverlay = $('panelOverlay');
+  
+  function togglePanel() {
+    panel.classList.toggle('panel-open');
+    panelOverlay.classList.toggle('active');
+  }
+  
+  function closePanel() {
+    panel.classList.remove('panel-open');
+    panelOverlay.classList.remove('active');
+  }
+  
+  panelToggle.addEventListener('click', togglePanel);
+  panelOverlay.addEventListener('click', closePanel);
+  
+  // Закрытие панели при клике вне её на десктопе
+  if (window.innerWidth > 900) {
+    document.addEventListener('click', (e) => {
+      if (panel.classList.contains('panel-open') && 
+          !panel.contains(e.target) && 
+          e.target !== panelToggle) {
+        closePanel();
+      }
+    });
+  }
+
   // UI actions
   $('loadBtn').addEventListener('click', () => {
     const f = fileInput.files && fileInput.files[0];
@@ -551,6 +671,7 @@
     cards = $('shuffleSelect').value === '1' ? shuffleArray(sample) : sample.slice();
     idx = 0; flippedCount = 0;
     renderCard();
+    closePanel(); // Закрываем панель после загрузки примера
   });
 
   $('nextBtn').addEventListener('click', nextCard);
@@ -567,6 +688,7 @@
     if (e.code === 'ArrowRight') nextCard();
     if (e.code === 'ArrowLeft') prevCard();
     if (e.code === 'Space') { e.preventDefault(); toggleFlip(); }
+    if (e.code === 'Escape') closePanel(); // ESC закрывает панель
   });
 
   // initial render
